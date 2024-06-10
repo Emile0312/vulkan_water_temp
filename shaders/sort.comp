@@ -1,0 +1,42 @@
+#version 450
+
+layout(binding = 10) uniform SortBufferObject{
+    uint begin_swaps;
+    uint nb_swaps;
+} param;
+
+struct Swap {
+    uint a;
+    uint b;
+};
+
+layout(std430, binding = 11) buffer ChunkSSBO {
+    uint chunks[ ];
+};
+layout(std430, binding = 12) buffer IndexSSBOIn {
+    uint particlesIndex[ ];
+};
+
+layout(std430, binding = 13) buffer SwapSSBOIn {
+    Swap SwapOrders[ ];
+};
+
+layout (local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+void main(){
+    uint index = gl_GlobalInvocationID.x;
+    if(index >= param.nb_swaps) return;
+    uint a = SwapOrders[param.begin_swaps + index].a;
+    uint b = SwapOrders[param.begin_swaps + index].b;
+    if(chunks[a] > chunks[b])
+    {
+        uint temp = chunks[a];
+        chunks[a] = chunks[b];
+        chunks[b] = temp;
+
+        uint temp_i = particlesIndex[a];
+        particlesIndex[a] = particlesIndex[b];
+        particlesIndex[b] = temp_i;
+    }
+}
+

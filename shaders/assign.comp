@@ -1,0 +1,97 @@
+#version 450
+
+layout(binding = 0) uniform UniformBufferObject {
+    mat4 model;
+    mat4 view;
+    mat4 proj;
+    vec3 camPosition;
+    vec3 lightsource;
+} ubo;
+
+layout(binding = 1) uniform OptionBufferObject {
+    float l0; // 0.04
+    float k; //1.0
+    float a; //0.05
+    float g; //0.98 ?
+    float delta_t; //variable 
+    float max_dist; //1.0 - 1.1
+    uint nb_particles; // 300000000000 !
+    uint nb_triangles;
+    uint nb_points;
+    uint nb_chunks;
+    float color; // ~ 3
+    float epsilon; // 0.001
+    float blending;
+} opt;
+
+struct Particle {
+    vec3 position;
+    vec3 velocity;
+};
+
+struct Vertex {
+    vec3 pos;
+    vec3 color;
+};
+
+struct Statend {
+    uint start;
+    uint end;
+};
+
+
+layout(std140, binding = 2) readonly buffer ParticleSSBOIn {
+    Particle particlesOld[ ];
+};
+
+layout(std140, binding = 3)  buffer ParticleSSBOout {
+    Particle particlesNew[ ];
+};
+
+layout(std140, binding = 4) buffer SommetsSSBOIn {
+    Vertex points[ ];
+};
+
+layout(std430, binding = 5) buffer TrianglesSSBOIn {
+    uint triangles[ ];
+};
+
+layout(std430, binding = 6) buffer ChunkSSBO {
+    uint chunks[ ];
+};
+layout(std430, binding = 7) buffer IndexSSBOIn {
+    uint particlesIndex[ ];
+};
+layout(std430, binding = 8) buffer ChunkIndexSSBOIn {
+    Statend chunkIndex[ ];
+};
+
+layout (local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+
+int modulo(int x,int N){
+    return (x % N + N) %N;
+}
+
+uint hash(ivec3 pos)
+{
+    return(uint(mod(pos.x*727 + pos.y*359 + pos.z*547, opt.nb_chunks)));
+}
+
+ivec3 to_chunk_coords(vec3 point)
+{
+    const float size = opt.l0*opt.max_dist;
+    return(ivec3(  int( (point.x )/size),
+                    int( (point.y )/size), 
+                    int( (point.z )/size)
+                    ));
+}
+
+void main()
+{
+    uint index = gl_GlobalInvocationID.x;
+    if(index >= opt.nb_particles) return ;
+    float size = opt.l0*opt.max_dist;
+    ivec3 chunk_coords = to_chunk_coords(particlesOld[particlesIndex[index]].position);
+    chunks[index] = hash(chunk_coords);
+}
